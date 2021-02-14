@@ -26,8 +26,7 @@ class Streamer:
             while chunk < length:
                 self.socket.sendto(data_bytes[chunk - max_packet:chunk], (self.dst_ip, self.dst_port))
                 chunk = chunk + max_packet
-            if chunk != length:
-                self.socket.sendto(data_bytes[chunk - max_packet:], (self.dst_ip, self.dst_port))
+            self.socket.sendto(data_bytes[chunk - max_packet:], (self.dst_ip, self.dst_port))
 
 
     def recv(self) -> bytes:
