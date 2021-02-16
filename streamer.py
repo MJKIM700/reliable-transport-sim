@@ -39,19 +39,22 @@ class Streamer:
             #print(calcsize('sic16s'))
             #print('send size', len(pack(str(length) + 'sic16s', data_bytes, self.seq, b'd', self.hasher(data_bytes))))
 
-            self.socket.sendto(pack(str(length) + 'sic16s', data_bytes, self.seq, b'd', self.hasher(data_bytes)), (self.dst_ip, self.dst_port))
+            self.socket.sendto(pack(str(length) + 'sic16s', data_bytes, self.seq, b'd', self.hasher(pack(str(length) + 'sic',
+                                                                                                         data_bytes, self.seq, b'd'))), (self.dst_ip, self.dst_port))
             self.seq = self.seq + 1
             packets_sent += 1
         else:
             chunk = max_packet
             while chunk < length:
                 # print('send size', len(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:chunk], self.seq, b'd')))
-                self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:chunk], self.seq, b'd', self.hasher(data_bytes[chunk - max_packet:chunk])), (self.dst_ip, self.dst_port))
+                self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:chunk], self.seq, b'd',
+                                        self.hasher(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:chunk], self.seq, b'd'))), (self.dst_ip, self.dst_port))
                 self.seq = self.seq + 1
                 packets_sent += 1
                 chunk = chunk + max_packet
             # print('send size', len(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:], self.seq, b'd')))
-            self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:], self.seq, b'd', self.hasher(data_bytes[chunk - max_packet:])), (self.dst_ip, self.dst_port))
+            self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:], self.seq, b'd', self.hasher(pack(str(max_packet) + 'sic',
+                                                                                                                                  data_bytes[chunk - max_packet:], self.seq, b'd'))), (self.dst_ip, self.dst_port))
             self.seq = self.seq + 1
             packets_sent += 1
         return packets_sent
@@ -80,8 +83,8 @@ class Streamer:
         # your code goes here!  The code below should be changed!
         
         # this sample code just calls the recvfrom method on the LossySocket
-        print("Looking for", self.prev_recv + 1)
         while not str(self.prev_recv + 1) in self.buffer:
+            print("Looking for", self.prev_recv + 1)
             time.sleep(0.1)
             continue
 
@@ -101,20 +104,19 @@ class Streamer:
                 data_bytes, seq_num, packet_type, data_hash = unpack(str(len(data) - 21) + 'sic16s', data)
                 
                 #check corrupted data
-                ref_hash = self.hasher(data_bytes.rstrip(b'\x00'))
+                ref_hash = self.hasher(pack(str(len(data) - 21) + 'sic', data_bytes, seq_num, packet_type))
                 
                 if ref_hash != data_hash:
                     #corrupted packet is dropped here
-                    self.prev_recv = self.prev_recv - 1
                     continue
                 elif str(packet_type)[2] == 'a':
                     self.ack = True
                 elif str(packet_type)[2] == 'd':
-                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
+                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(pack('2sic', b'aa', self.prev_recv, b'a'))), (self.dst_ip, self.dst_port))
                     data_bytes = bytes(data_bytes.decode('utf-8').rstrip('\0x00'), encoding='utf-8')
                     self.buffer[str(seq_num)] = data_bytes
                 else:
-                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
+                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(pack('2sic', b'aa', self.prev_recv, b'a'))), (self.dst_ip, self.dst_port))
                 print('new buffer', self.buffer)
             except Exception as e:
                 print("listener died!")
@@ -126,7 +128,7 @@ class Streamer:
         # your code goes here, especially after you add ACKs and retransmissions.
         self.ack = False
         while not self.ack:
-            self.socket.sendto(pack('2sic16s', b'ff', self.seq, b'f', self.hasher(b'ff')), (self.dst_ip, self.dst_port))
+            self.socket.sendto(pack('2sic16s', b'ff', self.seq, b'f', self.hasher(pack('2sic', b'ff', self.seq, b'f'))), (self.dst_ip, self.dst_port))
             time.sleep(0.25)
         time.sleep(2)
         self.closed = True
