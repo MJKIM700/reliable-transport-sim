@@ -32,7 +32,7 @@ class Streamer:
     def send_helper(self, data_bytes:bytes) -> int:
         length = len(data_bytes)
         #i'm changing the packet structure to fit the hash [16 byte s for storing hash]
-        max_packet = int(1472 - calcsize('ic16s'))
+        max_packet = int(1400 - calcsize('ic16s'))
         
         packets_sent = 0
         if length <= max_packet:
@@ -80,8 +80,9 @@ class Streamer:
         # your code goes here!  The code below should be changed!
         
         # this sample code just calls the recvfrom method on the LossySocket
+        print("Looking for", self.prev_recv + 1)
         while not str(self.prev_recv + 1) in self.buffer:
-            time.sleep(0.005)
+            time.sleep(0.1)
             continue
 
         print('found it in here', self.buffer)
@@ -96,7 +97,7 @@ class Streamer:
                 if len(data) == 0:
                     continue
                 # store the data in the receive buffer #len(data) - 5 --> - (5+16)
-                #print('received', unpack(str(len(data) - 21) + 'sic16s', data))
+                print('received', unpack(str(len(data) - 21) + 'sic16s', data)[0:3])
                 data_bytes, seq_num, packet_type, data_hash = unpack(str(len(data) - 21) + 'sic16s', data)
                 
                 #check corrupted data
@@ -104,15 +105,17 @@ class Streamer:
                 
                 if ref_hash != data_hash:
                     #corrupted packet is dropped here
-                    break
+                    self.prev_recv = self.prev_recv - 1
+                    continue
                 elif str(packet_type)[2] == 'a':
                     self.ack = True
                 elif str(packet_type)[2] == 'd':
-                    self.socket.sendto(pack('2sic16s', b'aa', self.seq, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
+                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
                     data_bytes = bytes(data_bytes.decode('utf-8').rstrip('\0x00'), encoding='utf-8')
                     self.buffer[str(seq_num)] = data_bytes
                 else:
-                    self.socket.sendto(pack('2sic16s', b'aa', self.seq, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
+                    self.socket.sendto(pack('2sic16s', b'aa', self.prev_recv, b'a', self.hasher(b'aa')), (self.dst_ip, self.dst_port))
+                print('new buffer', self.buffer)
             except Exception as e:
                 print("listener died!")
                 print(e)
