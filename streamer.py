@@ -4,6 +4,7 @@ from lossy_socket import LossyUDP
 from socket import INADDR_ANY
 from struct import *
 import time
+import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
 
 
@@ -23,6 +24,11 @@ class Streamer:
         self.ack = False
         executor = ThreadPoolExecutor(max_workers=1)
         executor.submit(self.listener)
+        self.hash = hashlib.md5()
+
+    def get_hash(self, data:bytes):
+        self.hash.update(data)
+        return self.hash.digest(), self.hash.digest_size
 
     def send_helper(self, data_bytes:bytes) -> int:
         length = len(data_bytes)
@@ -64,15 +70,17 @@ class Streamer:
 
 
 
+
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
         # your code goes here!  The code below should be changed!
         
         # this sample code just calls the recvfrom method on the LossySocket
         while not str(self.prev_recv + 1) in self.buffer:
-            pass
+            time.sleep(0.005)
+            continue
 
-        print('didnt receive it, but found it in here', self.buffer)
+        print('found it in here', self.buffer)
         self.prev_recv = self.prev_recv + 1
         return self.buffer.pop(str(self.prev_recv))
 
