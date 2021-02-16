@@ -29,51 +29,58 @@ class Streamer:
         h = hashlib.md5(incoming).digest()
         return h
 
-    def send_helper(self, data_bytes:bytes) -> int:
+    def send_helper(self, data_bytes:bytes, retransmit):
         length = len(data_bytes)
         #i'm changing the packet structure to fit the hash [16 byte s for storing hash]
         max_packet = int(1400 - calcsize('ic16s'))
-        
-        packets_sent = 0
+
         if length <= max_packet:
             #print(calcsize('sic16s'))
             #print('send size', len(pack(str(length) + 'sic16s', data_bytes, self.seq, b'd', self.hasher(data_bytes))))
 
             self.socket.sendto(pack(str(length) + 'sic16s', data_bytes, self.seq, b'd', self.hasher(pack(str(length) + 'sic',
                                                                                                          data_bytes, self.seq, b'd'))), (self.dst_ip, self.dst_port))
-            self.seq = self.seq + 1
-            packets_sent += 1
+
+            if not retransmit:
+                self.wait_ack(data_bytes)
+            #     self.seq = self.seq + 1
         else:
             chunk = max_packet
             while chunk < length:
                 # print('send size', len(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:chunk], self.seq, b'd')))
                 self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:chunk], self.seq, b'd',
                                         self.hasher(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:chunk], self.seq, b'd'))), (self.dst_ip, self.dst_port))
-                self.seq = self.seq + 1
-                packets_sent += 1
+
+                if not retransmit:
+                    self.wait_ack(data_bytes[chunk - max_packet:chunk])
+                #     self.seq = self.seq + 1
                 chunk = chunk + max_packet
             # print('send size', len(pack(str(max_packet) + 'sic', data_bytes[chunk - max_packet:], self.seq, b'd')))
             self.socket.sendto(pack(str(max_packet) + 'sic16s', data_bytes[chunk - max_packet:], self.seq, b'd', self.hasher(pack(str(max_packet) + 'sic',
                                                                                                                                   data_bytes[chunk - max_packet:], self.seq, b'd'))), (self.dst_ip, self.dst_port))
-            self.seq = self.seq + 1
-            packets_sent += 1
-        return packets_sent
 
-    def send(self, data_bytes: bytes) -> None:
-        """Note that data_bytes can be larger than one packet."""
-        # Your code goes here!  The code below should be changed!
-        packets_sent = self.send_helper(data_bytes)
+            if not retransmit:
+                self.wait_ack(data_bytes[chunk - max_packet:])
+            #     self.seq = self.seq + 1
+
+    def wait_ack(self, data_bytes:bytes):
         while not self.ack:
             time.sleep(0.25)
             print(self.ack)
             if not self.ack:
-                self.seq = self.seq - packets_sent
-                packets_sent = self.send_helper(data_bytes)
+                self.send_helper(data_bytes, True)
                 print("sending {} again bc dropped".format(data_bytes))
                 continue
             else:
+                self.seq = self.seq + 1
                 break
         self.ack = False
+
+    def send(self, data_bytes: bytes) -> None:
+        """Note that data_bytes can be larger than one packet."""
+        # Your code goes here!  The code below should be changed!
+        self.send_helper(data_bytes, False)
+
 
 
 
